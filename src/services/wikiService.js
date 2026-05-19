@@ -143,7 +143,7 @@ export function loadWiki() {
         for (const [title, entry] of Object.entries(oldData)) {
           const category = entry.category || 'Outros';
           const folderName = CATEGORY_DIRS[category] || 'Outros';
-          const safeFilename = title.replace(/[\/\\?%*:|"<> ]/g, '_') + '.md';
+          const safeFilename = title.replace(/[\/\\?%*:|"<>\[\] ]/g, '_') + '.md';
           const filePath = path.join(WIKI_DIR, folderName, safeFilename);
           
           const fileContent = formatMarkdownFile(
@@ -205,7 +205,7 @@ export function createWikiEntry(title, content, category, aliasesStr = '') {
 
   const normalizedCategory = CATEGORY_DIRS[category] ? category : 'Outros';
   const folderName = CATEGORY_DIRS[normalizedCategory];
-  const safeFilename = normalizedTitle.replace(/[\/\\?%*:|"<> ]/g, '_') + '.md';
+  const safeFilename = normalizedTitle.replace(/[\/\\?%*:|"<>\[\] ]/g, '_') + '.md';
   const filePath = path.join(WIKI_DIR, folderName, safeFilename);
 
   const aliases = aliasesStr
@@ -255,7 +255,7 @@ export function editWikiEntry(title, content, category = null, aliasesStr = null
     }
     entry.category = category;
     const folderName = CATEGORY_DIRS[category] || 'Outros';
-    const safeFilename = entry.title.replace(/[\/\\?%*:|"<> ]/g, '_') + '.md';
+    const safeFilename = entry.title.replace(/[\/\\?%*:|"<>\[\] ]/g, '_') + '.md';
     entry.filePath = path.join(WIKI_DIR, folderName, safeFilename);
   }
 
