@@ -10,6 +10,7 @@ import {
   getHistory,
   getUserGeminiToolPreferences,
   getUserNanoBananaMode,
+  getCampaignSummary,
 } from '../state/botState.js';
 import {
   buildGeminiToolsFromPreferences,
@@ -40,7 +41,9 @@ import {
   processPromptAndMediaAttachments,
 } from './attachmentService.js';
 import { streamModelResponse } from './streamingService.js';
+import { waitForQuota } from './quotaManager.js';
 import { applyEmbedFallback, createStatusEmbed } from '../utils/discord.js';
+import { getRelevantWikiContext } from './wikiService.js';
 import { attachActionButtons, messageToActionContext } from '../utils/responseActions.js';
 import { toDeleteHistoryRef } from '../utils/historyRef.js';
 
@@ -111,7 +114,24 @@ async function createChatSession(message) {
     const selectedTools = buildGeminiToolsFromPreferences(userToolPreferences);
     const personality = resolveInstructions(message);
     const fullSystemInstruction = buildFinalSystemInstruction(personality, userToolPreferences);
-    const instructions = await buildConversationContext(message, fullSystemInstruction);
+    const historyId = resolveHistoryId(message);
+    let instructions = await buildConversationContext(message, fullSystemInstruction);
+
+    const summary = getCampaignSummary(historyId);
+    if (summary) {
+      instructions += `\n\n## Memória de Longo Prazo da Campanha (Resumo dos Acontecimentos Anteriores)\n${summary}`;
+    }
+
+    const clientUserId = message.client?.user?.id;
+    const mentionPattern = clientUserId ? getMentionPattern(clientUserId) : null;
+    const messageContent = mentionPattern
+      ? message.content.replace(mentionPattern, '').trim()
+      : message.content.trim();
+
+    const wikiContext = getRelevantWikiContext(messageContent);
+    if (wikiContext) {
+      instructions += `\n\n## Conhecimento Temático da Campanha (Wiki)\nUse as seguintes informações sobre os termos mencionados se necessário:\n${wikiContext}`;
+    }
 
     const chatConfig = {
       systemInstruction: {
@@ -140,15 +160,26 @@ async function createChatSession(message) {
       chatConfig.tools = selectedTools;
     }
 
-    const historyId = resolveHistoryId(message);
     const category = resolveHistoryCategory(message);
     const limit = config.chatHistoryLimits[category];
+    const history = getHistory(historyId, limit);
 
-    return await genAI.chats.create({
-      model: activeModel,
-      config: chatConfig,
-      history: getHistory(historyId, limit),
-    });
+    // Lista de models para fallback (em ordem de prioridade)
+    const modelsToTry = [activeModel, 'gemini-2.5-flash', 'gemini-2.0-flash-lite', 'gemini-1.5-flash'];
+    
+    // Tenta criar o chat com fallback
+    for (const modelName of modelsToTry) {
+      try {
+        return await genAI.chats.create({
+          model: modelName,
+          config: chatConfig,
+          history: history,
+        });
+      } catch (error) {
+        if (modelName === modelsToTry[modelsToTry.length - 1]) throw error;
+        console.warn(`Aviso: Modelo ${modelName} falhou. Tentando fallback...`);
+      }
+    }
   } catch (error) {
     logServiceError('Gemini', error, {
       operation: 'createChatSession',
@@ -227,11 +258,19 @@ function getMentionPattern(clientUserId) {
 // Error reply helper
 // ---------------------------------------------------------------------------
 
-async function sendErrorReply(message, processingMessage, deleteHistoryRef) {
+async function sendErrorReply(message, processingMessage, deleteHistoryRef, error = null) {
+  let title = 'Request Failed';
+  let description = 'An unexpected error occurred while processing your request.';
+
+  if (error?.status === 'RESOURCE_EXHAUSTED') {
+    title = 'Quota Limit Reached';
+    description = error.message || 'The Gemini API quota has been exceeded for today. Please try again tomorrow.';
+  }
+
   const errorEmbed = createStatusEmbed({
     variant: 'error',
-    title: 'Request Failed',
-    description: 'An unexpected error occurred while processing your request.',
+    title,
+    description,
   });
 
   const ctx = messageToActionContext(message);
@@ -284,28 +323,11 @@ export async function handleTextMessage(message) {
   let unsupportedWarningMessageId = null;
 
   try {
-    if (SEND_RETRY_ERRORS_TO_DISCORD) {
-      processingMessage = await message.reply(applyEmbedFallback(message.channel, {
-        embeds: [createProcessingEmbed()],
-      }));
-
-      messageContent = await extractFileText(message, messageContent);
-      await processingMessage.edit(applyEmbedFallback(message.channel, {
-        embeds: [createProcessingEmbed('[☑️]', '[🔁]')],
-      }));
-
-      parts = await processPromptAndMediaAttachments(messageContent, message);
-      const warningMessage = await sendUnsupportedAttachmentsWarning(unsupportedAttachments, message, deleteHistoryRef);
-      unsupportedWarningMessageId = warningMessage?.id || null;
-      await processingMessage.edit(applyEmbedFallback(message.channel, {
-        embeds: [createProcessingEmbed('[☑️]', '[☑️]', '**All checks complete.** Waiting for generation...')],
-      }));
-    } else {
-      messageContent = await extractFileText(message, messageContent);
-      parts = await processPromptAndMediaAttachments(messageContent, message);
-      const warningMessage = await sendUnsupportedAttachmentsWarning(unsupportedAttachments, message, deleteHistoryRef);
-      unsupportedWarningMessageId = warningMessage?.id || null;
-    }
+    await waitForQuota();
+    messageContent = await extractFileText(message, messageContent);
+    parts = await processPromptAndMediaAttachments(messageContent, message);
+    const warningMessage = await sendUnsupportedAttachmentsWarning(unsupportedAttachments, message, deleteHistoryRef);
+    unsupportedWarningMessageId = warningMessage?.id || null;
   } catch (error) {
     stopTyping();
     logServiceError('ConversationService', error, {
@@ -314,12 +336,10 @@ export async function handleTextMessage(message) {
       userId: message.author?.id,
     });
 
-    if (processingMessage) {
-      try {
-        await sendErrorReply(message, processingMessage, deleteHistoryRef);
-      } catch (replyError) {
-        logServiceError('ConversationService', replyError, { operation: 'initializeMessageErrorReply' });
-      }
+    try {
+      await sendErrorReply(message, processingMessage, deleteHistoryRef, error);
+    } catch (replyError) {
+      logServiceError('ConversationService', replyError, { operation: 'initializeMessageErrorReply' });
     }
     return;
   }
@@ -345,7 +365,7 @@ export async function handleTextMessage(message) {
       userId: message.author?.id,
     });
     try {
-      await sendErrorReply(message, processingMessage, deleteHistoryRef);
+      await sendErrorReply(message, processingMessage, deleteHistoryRef, error);
     } catch (replyError) {
       logServiceError('StreamingService', replyError, { operation: 'errorReply' });
     }

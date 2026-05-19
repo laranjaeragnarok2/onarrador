@@ -107,7 +107,7 @@ export const TEXT_ATTACHMENT_EXTENSIONS = new Set([
   '.svg',
 ]);
 
-export const EMBED_RESPONSE_LIMIT = 3_900;
+export const EMBED_RESPONSE_LIMIT = 2_000;
 export const PLAIN_RESPONSE_LIMIT = 1_900;
 
 export function cloneDefaultServerSettings() {

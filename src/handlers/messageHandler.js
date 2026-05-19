@@ -62,6 +62,12 @@ async function replyRequestInProgress(message) {
 }
 
 export async function handleMessageCreate(message) {
+  // Restrição de canal exclusivo para RPG
+  const ALLOWED_CHANNEL_ID = '1503544201684586517';
+  if (message.channelId !== ALLOWED_CHANNEL_ID) {
+    return;
+  }
+
   if (message.author.bot || message.content.startsWith('!')) {
     return;
   }

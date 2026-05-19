@@ -33,14 +33,9 @@ export async function ensureInitialBotMessage(initialBotMessage, originalMessage
       return initialBotMessage;
     }
 
-    return await originalMessage.reply(applyEmbedFallback(originalMessage.channel, {
-      embeds: [createStatusEmbed({
-        variant: 'info',
-        title: 'Generating Response',
-        description: 'Working on your request now. You can stop generation at any time.',
-      })],
-      components: [createStopButtonRow()],
-    }));
+    // Retornamos null para que nenhuma mensagem de status seja enviada.
+    // O bot apenas aparecerá como "digitando" até que o texto real comece.
+    return null;
   } catch (error) {
     logControlError('ensureInitialBotMessage', error, {
       messageId: originalMessage.id,

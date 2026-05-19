@@ -23,11 +23,9 @@ export const client = new Client({
   partials: [Partials.Channel],
 });
 
-if (config.enableGeminiApiLogging) {
-  initializeGeminiApiLogging();
-}
-
-export const genAI = new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY });
+// Chave priorizada
+const apiKey = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY;
+export const genAI = new GoogleGenAI({ apiKey });
 
 export const activeRequests = new Set();
 

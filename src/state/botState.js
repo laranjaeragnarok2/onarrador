@@ -52,6 +52,8 @@ export const state = {
   userSessions: {},
   userNanoBananaMode: {},
   userResponseActionButtons: {},
+  quotaUsage: {},
+  campaignSummaries: {},
 };
 
 export const chatHistoryLock = new Mutex();
@@ -69,6 +71,8 @@ export function saveStateToFile() {
 export async function saveStateToFileImmediate() {
   await persistSaveImmediate(state);
 }
+
+export { markHistoryDirty };
 
 // ---------------------------------------------------------------------------
 // State initialization
@@ -670,3 +674,19 @@ export function renameSession(userId, sessionId, newName) {
 export function deleteSession(userId, sessionId) {
   return deleteSessionInternal(state, userId, sessionId, getUserSessions, markHistoryDeleted, saveStateToFile);
 }
+
+// ---------------------------------------------------------------------------
+// Campaign Summaries (Long-term RPG Memory)
+// ---------------------------------------------------------------------------
+
+/** Get the running campaign summary for a history ID. */
+export function getCampaignSummary(historyId) {
+  return state.campaignSummaries[historyId] || '';
+}
+
+/** Set the running campaign summary for a history ID. */
+export function setCampaignSummary(historyId, summary) {
+  state.campaignSummaries[historyId] = summary;
+  saveStateToFile();
+}
+

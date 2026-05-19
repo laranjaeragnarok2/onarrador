@@ -105,20 +105,6 @@ export async function addDownloadButton(message, customId = 'download_message') 
 }
 
 export async function addDeleteButton(message, messageId, historyId = null) {
-  let payload = historyId
-    ? `${historyId}::${messageId}`
-    : messageId;
-
-  if (`delete_message-${payload}`.length > MAX_CUSTOM_ID_LENGTH) {
-    payload = messageId;
-  }
-
-  return appendButton(
-    message,
-    new ButtonBuilder()
-      .setCustomId(`delete_message-${payload}`)
-      .setLabel('Delete')
-      .setEmoji('🗑️')
-      .setStyle(ButtonStyle.Secondary),
-  );
+  // Botão de delete desativado a pedido do usuário
+  return message;
 }

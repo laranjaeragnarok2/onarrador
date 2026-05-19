@@ -6,12 +6,14 @@
 import { MessageFlags } from 'discord.js';
 import { OSUtils } from 'node-os-utils';
 
+import config from '../../config.js';
 import {
   addBlacklistedUser,
   clearChatHistoryFor,
   getTimeUntilNextReset,
   removeBlacklistedUser,
   shouldShowActionButtons,
+  state,
 } from '../state/botState.js';
 import { getActiveSessionDetails } from '../services/sessionService.js';
 import {
@@ -29,6 +31,13 @@ import {
   requireGuildAdmin,
   replyFeatureDisabled,
 } from './interactionHelpers.js';
+import {
+  getWikiEntry,
+  createWikiEntry,
+  editWikiEntry,
+  deleteWikiEntry,
+  listWikiEntries,
+} from '../services/wikiService.js';
 
 const osu = new OSUtils();
 
@@ -90,6 +99,11 @@ async function handleStatusCommand(interaction) {
             {
               name: 'Time Until Next Reset',
               value: getTimeUntilNextReset(),
+              inline: true,
+            },
+            {
+              name: 'Cota da API Gemini (Hoje)',
+              value: `Requisições hoje: \`${state.quotaUsage?.count || 0}\` / \`${config.quotaLimits?.maxRequestsPerDay || 'Ilimitado'}\`\nLimite por Minuto: \`${config.quotaLimits?.maxRequestsPerMinute || 360}\` RPM`,
               inline: true,
             },
           ],
@@ -192,6 +206,117 @@ async function handleWhitelistCommand(interaction) {
   });
 }
 
+async function handleWikiCommand(interaction) {
+  const subcommand = interaction.options.getSubcommand();
+
+  if (subcommand === 'buscar') {
+    const termo = interaction.options.getString('termo');
+    const entry = getWikiEntry(termo);
+    if (!entry) {
+      return replyWithEmbed(interaction, {
+        variant: 'error',
+        title: 'Página Não Encontrada',
+        description: `Não encontramos nenhuma página com o título ou sinônimo **"${termo}"** na wiki.`,
+      });
+    }
+
+    const aliasesText = entry.aliases && entry.aliases.length > 0
+      ? `\n*Sinônimos:* ${entry.aliases.map(a => `\`${a}\``).join(', ')}`
+      : '';
+
+    return replyWithEmbed(interaction, {
+      variant: 'primary',
+      title: `📖 Wiki: ${entry.title}`,
+      description: `**Categoria:** \`${entry.category}\`${aliasesText}\n\n${entry.content}`,
+    });
+  }
+
+  if (subcommand === 'listar') {
+    const categoria = interaction.options.getString('categoria');
+    const entries = listWikiEntries(categoria);
+
+    if (entries.length === 0) {
+      return replyWithEmbed(interaction, {
+        variant: 'info',
+        title: 'Wiki Vazia',
+        description: categoria
+          ? `Nenhuma página cadastrada na categoria **${categoria}**.`
+          : 'Nenhuma página cadastrada na wiki ainda.',
+      });
+    }
+
+    const listText = entries.map(e => `- **${e.title}** (\`${e.category}\`)`).join('\n');
+    return replyWithEmbed(interaction, {
+      variant: 'primary',
+      title: categoria ? `📚 Wiki: Páginas em "${categoria}"` : '📚 Wiki da Campanha',
+      description: `Aqui estão as páginas registradas:\n\n${listText}`,
+    });
+  }
+
+  if (subcommand === 'criar') {
+    const titulo = interaction.options.getString('titulo');
+    const conteudo = interaction.options.getString('conteudo');
+    const categoria = interaction.options.getString('categoria');
+    const aliases = interaction.options.getString('aliases') || '';
+
+    const res = createWikiEntry(titulo, conteudo, categoria, aliases);
+    if (!res.success) {
+      return replyWithEmbed(interaction, {
+        variant: 'error',
+        title: 'Falha ao Criar Página',
+        description: res.message,
+      });
+    }
+
+    return replyWithEmbed(interaction, {
+      variant: 'success',
+      title: 'Página Criada!',
+      description: `A página **"${res.entry.title}"** foi adicionada com sucesso à categoria \`${res.entry.category}\`.`,
+    });
+  }
+
+  if (subcommand === 'editar') {
+    const titulo = interaction.options.getString('titulo');
+    const conteudo = interaction.options.getString('conteudo');
+    const categoria = interaction.options.getString('categoria');
+    const aliases = interaction.options.getString('aliases');
+
+    const res = editWikiEntry(titulo, conteudo, categoria, aliases);
+    if (!res.success) {
+      return replyWithEmbed(interaction, {
+        variant: 'error',
+        title: 'Falha ao Editar Página',
+        description: res.message,
+      });
+    }
+
+    return replyWithEmbed(interaction, {
+      variant: 'success',
+      title: 'Página Atualizada!',
+      description: `A página **"${res.entry.title}"** foi editada com sucesso.`,
+    });
+  }
+
+  if (subcommand === 'deletar') {
+    const titulo = interaction.options.getString('titulo');
+    const res = deleteWikiEntry(titulo);
+
+    if (!res.success) {
+      return replyWithEmbed(interaction, {
+        variant: 'error',
+        title: 'Falha ao Deletar Página',
+        description: res.message,
+      });
+    }
+
+    return replyWithEmbed(interaction, {
+      variant: 'success',
+      title: 'Página Deletada',
+      description: `A página **"${titulo}"** foi removida da wiki.`,
+    });
+  }
+}
+
 /** Routes a chat-input command interaction to its handler. */
 export async function handleCommandInteraction(interaction) {
   try {
@@ -217,6 +342,7 @@ export async function handleCommandInteraction(interaction) {
         return showChannelDashboard(cmd);
       },
       status: handleStatusCommand,
+      wiki: handleWikiCommand,
     };
 
     const handler = handlers[interaction.commandName];

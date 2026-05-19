@@ -5,11 +5,17 @@
  */
 
 import { logServiceError } from '../utils/errorHandler.js';
+import { genAI } from '../core/runtime.js';
 import {
   chatHistoryLock,
   saveStateToFile,
   shouldShowActionButtons,
   updateChatHistory,
+  state,
+  markHistoryDirty,
+  saveStateToFileImmediate,
+  getCampaignSummary,
+  setCampaignSummary,
 } from '../state/botState.js';
 import {
   EMBED_RESPONSE_LIMIT,
@@ -19,6 +25,7 @@ import {
   PLAIN_RESPONSE_LIMIT,
   SEND_RETRY_ERRORS_TO_DISCORD,
   STREAM_UPDATE_DEBOUNCE_MS,
+  MODEL,
 } from '../constants.js';
 import { getResponsePreference, resolveHistoryId } from './conversationContext.js';
 import {
@@ -40,6 +47,7 @@ import {
   formatGeminiErrorForConsole,
 } from '../utils/errorFormatter.js';
 import { toDeleteHistoryRef } from '../utils/historyRef.js';
+import { getWikiEntry, createWikiEntry, editWikiEntry } from './wikiService.js';
 import {
   createAttemptTimeout,
   getRetryDelayMs,
@@ -71,6 +79,141 @@ function logStreamError(operation, error, metadata = {}) {
 // Conversation persistence
 // ---------------------------------------------------------------------------
 
+async function manageCampaignSummary(historyId) {
+  try {
+    const historyMap = state.chatHistories[historyId];
+    if (!historyMap) return;
+
+    const entries = Object.entries(historyMap);
+    const MAX_WINDOW_TURNS = 10;
+    const BUFFER_TURNS = 4;
+
+    if (entries.length >= MAX_WINDOW_TURNS + BUFFER_TURNS) {
+      console.log(`[Memory] Compactando histórico para ${historyId}. Turnos atuais: ${entries.length}`);
+      const oldestEntries = entries.slice(0, BUFFER_TURNS);
+      let dialogueToSummarize = '';
+
+      for (const [msgId, messages] of oldestEntries) {
+        for (const msg of messages) {
+          const roleName = msg.role === 'assistant' ? 'Mestre (IA)' : 'Jogador';
+          const text = Array.isArray(msg.content)
+            ? msg.content.map((p) => p.text || '').join(' ')
+            : '';
+          dialogueToSummarize += `${roleName}: ${text}\n\n`;
+        }
+      }
+
+      const currentSummary = getCampaignSummary(historyId) || 'Nenhum resumo anterior.';
+      const prompt = `Você é um assistente de Mestre de RPG responsável por manter a memória de longo prazo (resumo) e a enciclopédia/wiki da campanha.
+Abaixo está o resumo atual da campanha, seguido pelos diálogos mais recentes que precisam ser integrados à memória.
+
+RESUMO ATUAL:
+${currentSummary}
+
+NOVOS ACONTECIMENTOS (Diálogos):
+${dialogueToSummarize}
+
+Sua tarefa:
+Analise os diálogos novos e gere um objeto JSON contendo:
+1. "summary": Um resumo atualizado da campanha até o momento, conciso e detalhado, mantendo nomes de personagens, locais, itens, mistérios e o andamento geral da aventura.
+2. "wiki_updates": Uma lista de entidades importantes (NPCs, itens mágicos/relevantes, locais novos visitados ou termos históricos importantes) que foram introduzidas ou sofreram mudanças de status nestes novos diálogos. Cada entidade deve ter:
+   - "title": Nome próprio da entidade (ex: "Ferreiro Valdir", "Vila Nova").
+   - "category": Categoria da wiki (escolha estritamente entre: "NPC", "Local", "Item", "Lore", "Regra", "Outros").
+   - "content": A descrição do que aconteceu ou quem é esta entidade com base nos novos diálogos. Se a entidade já era descrita no resumo atual ou se você sabe que ela já existe, adicione novos fatos ou atualize a descrição dela.
+   - "aliases": Uma lista de termos/sinônimos em minúsculas que ativem essa página (ex: ["valdir", "ferreiro"]).
+
+Sua resposta deve ser estritamente no formato JSON abaixo:
+{
+  "summary": "...",
+  "wiki_updates": [
+    {
+      "title": "...",
+      "category": "...",
+      "content": "...",
+      "aliases": [...]
+    }
+  ]
+}`;
+
+      const summaryModels = [
+        MODEL,
+        'gemini-2.5-flash',
+        'gemini-2.0-flash-lite',
+        'gemini-1.5-flash',
+        'gemini-3-flash-preview',
+        'gemini-3.1-flash-lite',
+      ];
+
+      let response = null;
+      for (const mName of summaryModels) {
+        try {
+          response = await genAI.models.generateContent({
+            model: mName,
+            config: {
+              temperature: 0.3,
+              responseMimeType: 'application/json',
+            },
+            contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          });
+          if (response && response.text) break;
+        } catch (err) {
+          console.warn(`[Memory Fallback] Modelo ${mName} falhou por cota na compactação. Tentando próximo...`);
+        }
+      }
+
+      if (response && response.text) {
+        try {
+          const result = JSON.parse(response.text.trim());
+          const newSummary = result.summary || '';
+          const wikiUpdates = result.wiki_updates || [];
+
+          if (newSummary) {
+            setCampaignSummary(historyId, newSummary);
+          }
+
+          // Processa as atualizações automáticas de wiki
+          for (const update of wikiUpdates) {
+            if (update.title && update.content && update.category) {
+              const existing = getWikiEntry(update.title);
+              if (update.content.trim().length > 10) {
+                if (existing) {
+                  editWikiEntry(update.title, update.content, update.category, (update.aliases || []).join(','));
+                  console.log(`[Memory Wiki] Atualizado automaticamente: "${update.title}"`);
+                } else {
+                  createWikiEntry(update.title, update.content, update.category, (update.aliases || []).join(','));
+                  console.log(`[Memory Wiki] Criado automaticamente: "${update.title}"`);
+                }
+              }
+            }
+          }
+
+          for (const [msgId] of oldestEntries) {
+            delete state.chatHistories[historyId][msgId];
+          }
+          markHistoryDirty(historyId);
+          await saveStateToFileImmediate();
+          console.log(`[Memory] Resumo atualizado e wiki populada automaticamente para ${historyId}.`);
+        } catch (parseError) {
+          console.error('[Memory] Falha ao processar JSON de resumo/wiki:', parseError, response.text);
+          // Fallback para texto plano se não for JSON válido
+          const cleanText = response.text.trim();
+          if (cleanText) {
+            setCampaignSummary(historyId, cleanText);
+            for (const [msgId] of oldestEntries) {
+              delete state.chatHistories[historyId][msgId];
+            }
+            markHistoryDirty(historyId);
+            await saveStateToFileImmediate();
+            console.log(`[Memory Fallback] Salvo resumo simples em texto plano para ${historyId}.`);
+          }
+        }
+      }
+    }
+  } catch (error) {
+    console.error(`[Memory] Erro ao gerenciar resumo da campanha para ${historyId}:`, error);
+  }
+}
+
 async function persistConversation(historyId, messageId, parts, assistantParts) {
   await chatHistoryLock.runExclusive(async () => {
     updateChatHistory(historyId, [
@@ -78,6 +221,8 @@ async function persistConversation(historyId, messageId, parts, assistantParts) 
       { role: 'assistant', content: assistantParts },
     ], messageId);
     await saveStateToFile();
+
+    await manageCampaignSummary(historyId);
   });
 }
 
@@ -126,28 +271,36 @@ export async function streamModelResponse({
       activeAbortController.abort();
     }
 
-    await removeStopGeneratingButton(botMessage);
+    if (botMessage) {
+      await removeStopGeneratingButton(botMessage);
+    }
   };
 
-  const { collector, wasStopped } = createCollector(botMessage, originalMessage, stopActiveGeneration);
+  // Mutable collector placeholder
+  let generationCollector = null;
+  const wasStopped = () => activeAbortController?.signal.aborted || finalized;
 
   // Shared mutable accumulator updated by processStreamChunk
   const accumulator = createStreamAccumulator();
 
-  const flushBufferedText = () => {
+  const flushBufferedText = async () => {
     if (wasStopped() || finalized || isLargeResponse) return;
 
     if (!bufferedText.trim()) {
-      botMessage.edit(applyEmbedFallback(originalMessage.channel, {
-        embeds: [createStatusEmbed({
-          variant: 'muted',
-          title: 'Generating Response',
-          description: 'Still working on this response...',
-        })],
-      })).catch((error) => {
-        logStreamError('flushBufferedTextPlaceholder', error, { messageId: botMessage.id });
-      });
-    } else if (responsePreference === 'Embedded') {
+      return;
+    }
+
+    if (!botMessage) {
+       botMessage = await originalMessage.reply(applyEmbedFallback(originalMessage.channel, {
+         content: '✨ *O Mestre está pensando...*',
+       }));
+       
+       // Create collector only after message is sent
+       const { collector } = createCollector(botMessage, originalMessage, stopActiveGeneration);
+       generationCollector = collector;
+    }
+
+    if (responsePreference === 'Embedded') {
       buildResponseEmbed(botMessage, bufferedText, originalMessage, accumulator.groundingMetadata, accumulator.urlContextMetadata).catch((error) => {
         logStreamError('flushBufferedTextEmbed', error, { messageId: botMessage.id });
       });
@@ -168,6 +321,12 @@ export async function streamModelResponse({
       : '[Empty response]';
 
     clearPendingUpdate();
+
+    if (!botMessage) {
+      botMessage = await originalMessage.reply(applyEmbedFallback(originalMessage.channel, {
+        content: responseWasLarge ? '...' : normalizedFinalResponse,
+      }));
+    }
 
     if (!responseWasLarge) {
       if (responsePreference === 'Embedded') {
@@ -207,11 +366,22 @@ export async function streamModelResponse({
 
     finalized = true;
     activeAbortController = null;
-    collector.stop('completed');
+    generationCollector?.stop('completed');
   };
 
   try {
-    let attempts = MAX_GENERATION_ATTEMPTS;
+    const fallbackModels = [
+      chat.model,
+      'gemini-2.5-flash',
+      'gemini-2.0-flash',
+      'gemini-1.5-flash',
+      'gemini-3-flash-preview',
+      'gemini-3.1-flash-lite',
+      'gemini-2.5-pro',
+      'gemini-2.0-flash-lite',
+    ];
+    let currentModelIndex = 0;
+    let attempts = fallbackModels.length; // 8 attempts total
 
     while (attempts > 0 && !wasStopped()) {
       let attemptTimeout = null;
@@ -287,10 +457,16 @@ export async function streamModelResponse({
 
         activeAbortController = null;
 
+        if (error?.status === 429 || error?.status === 503 || error?.message?.includes('429') || error?.message?.includes('503')) {
+          currentModelIndex = (currentModelIndex + 1) % fallbackModels.length;
+          chat.model = fallbackModels[currentModelIndex];
+          console.log(`[Model Fallback] Cota/Sobrecarga detectada. Alternando chat.model para: ${chat.model}`);
+        }
+
         attempts -= 1;
         console.error(formatGeminiErrorForConsole(error, {
-          attemptNumber: MAX_GENERATION_ATTEMPTS - attempts,
-          totalAttempts: MAX_GENERATION_ATTEMPTS,
+          attemptNumber: fallbackModels.length - attempts,
+          totalAttempts: fallbackModels.length,
           remainingAttempts: attempts,
           userId: originalMessage.author.id,
           channelId: originalMessage.channel?.id,
@@ -313,7 +489,7 @@ export async function streamModelResponse({
             }));
 
             const linkedMessageIds = [
-              botMessage.id,
+              botMessage?.id,
               ...extraMessageIds,
             ].filter(Boolean);
 
@@ -325,16 +501,18 @@ export async function streamModelResponse({
                 deleteHistoryRef,
               );
 
-              botMessage = await clearMessageActionRows(botMessage);
-              botMessage = await addSettingsButton(botMessage);
-              botMessage = await addDeleteButton(botMessage, [botMessage.id, updatedErrorMessage.id, ...extraMessageIds].join(','), deleteHistoryRef);
-            } else {
+              if (botMessage) {
+                botMessage = await clearMessageActionRows(botMessage);
+                botMessage = await addSettingsButton(botMessage);
+                botMessage = await addDeleteButton(botMessage, [botMessage.id, updatedErrorMessage.id, ...extraMessageIds].join(','), deleteHistoryRef);
+              }
+            } else if (botMessage) {
               botMessage = await clearMessageActionRows(botMessage);
             }
             finalized = true;
           }
 
-          collector.stop();
+          generationCollector?.stop();
           return;
         }
 
@@ -363,7 +541,7 @@ export async function streamModelResponse({
     if (!finalized && !wasStopped()) {
       clearPendingUpdate();
     }
-    if (finalized) {
+    if (finalized && botMessage) {
       await removeStopGeneratingButton(botMessage);
     }
   }
