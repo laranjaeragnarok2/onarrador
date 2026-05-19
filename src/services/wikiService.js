@@ -30,21 +30,8 @@ let gitSyncTimeout = null;
 
 /** Trigger debounced git add/commit/push to publish changes to Vercel via GitHub */
 function triggerGitSync() {
-  if (gitSyncTimeout) {
-    clearTimeout(gitSyncTimeout);
-  }
-  
-  // Debounce for 5 seconds to batch multiple operations (e.g. from campaign summarization)
-  gitSyncTimeout = setTimeout(() => {
-    console.log('[Wiki Git Sync] Iniciando commit e push automático dos arquivos da Wiki...');
-    exec('git add wiki/ && git commit -m "docs: wiki auto-update from campaign" && git push', (error, stdout, stderr) => {
-      if (error) {
-        console.error('[Wiki Git Sync] Erro no push automático (provavelmente sem alterações ou sem credenciais):', error.message);
-        return;
-      }
-      console.log('[Wiki Git Sync] Wiki sincronizada com sucesso no GitHub:\n', stdout);
-    });
-  }, 5000);
+  // Automatic git commits disabled. The user handles commits manually.
+  return;
 }
 
 function regenerateCategoryIndex(category) {
