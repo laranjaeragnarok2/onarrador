@@ -10,10 +10,16 @@
     "officeparser": "^6.0.4"
   },
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "wiki:dev": "vitepress dev wiki",
+    "wiki:build": "vitepress build wiki",
+    "wiki:preview": "vitepress preview wiki"
   },
   "overrides": {
     "gaxios": "^7.1.4",
     "undici": "^7.24.3"
+  },
+  "devDependencies": {
+    "vitepress": "^1.6.4"
   }
 }
