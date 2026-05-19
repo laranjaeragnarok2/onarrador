@@ -1,3 +1,15 @@
-# 🌀 Outros Assuntos
+---
+layout: doc
+---
 
-Informações diversas sobre a campanha que não se enquadram nas outras categorias.
+# 🌀 Outros Registros
+
+Diários de bordo, anotações diversas e resumos de sessões.
+
+---
+
+## 📄 Artigos Disponíveis (3)
+
+*   [Editora Runas](./Editora_Runas.md)
+*   [Mestre (IA)](./Mestre_(IA).md)
+*   [Planilha de Habilidades](./Planilha_de_Habilidades.md)

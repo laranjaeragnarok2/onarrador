@@ -1,3 +1,13 @@
+---
+layout: doc
+---
+
 # 👥 Personagens & NPCs
 
-Esta seção contém a lista de todos os personagens e NPCs encontrados ou mencionados ao longo da campanha.
+Fichas de aliados, inimigos, criaturas e personagens dos jogadores.
+
+---
+
+## 📄 Artigos Disponíveis (1)
+
+*   [André](./André.md)

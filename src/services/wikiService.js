@@ -15,6 +15,15 @@ const CATEGORY_DIRS = {
   'Outros': 'Outros'
 };
 
+const CATEGORY_DETAILS = {
+  'NPC': { title: '👥 Personagens & NPCs', desc: 'Fichas de aliados, inimigos, criaturas e personagens dos jogadores.' },
+  'Local': { title: '🏰 Locais & Cenários', desc: 'Cidades, reinos, masmorras e pontos históricos descobertos.' },
+  'Item': { title: '⚔️ Itens & Equipamentos', desc: 'Armas, armaduras, tomos mágicos e itens de aventureiro.' },
+  'Lore': { title: '📜 História & Lore', desc: 'Cronologias, deuses, lendas e mitos do cenário de campanha.' },
+  'Regra': { title: '📖 Regras & Guias', desc: 'Regras de combate, guias de classes, raças e mecânicas de Mighty Blade.' },
+  'Outros': { title: '🌀 Outros Registros', desc: 'Diários de bordo, anotações diversas e resumos de sessões.' }
+};
+
 // Memory cache to avoid synchronous disk reads on every message
 let wikiCache = null;
 let gitSyncTimeout = null;
@@ -36,6 +45,36 @@ function triggerGitSync() {
       console.log('[Wiki Git Sync] Wiki sincronizada com sucesso no GitHub:\n', stdout);
     });
   }, 5000);
+}
+
+function regenerateCategoryIndex(category) {
+  try {
+    const details = CATEGORY_DETAILS[category];
+    const folderName = CATEGORY_DIRS[category];
+    if (!details || !folderName) return;
+
+    const dirPath = path.join(WIKI_DIR, folderName);
+    if (!fs.existsSync(dirPath)) return;
+
+    const files = fs.readdirSync(dirPath)
+      .filter(file => file.endsWith('.md') && file !== 'index.md');
+
+    let mdContent = `---\nlayout: doc\n---\n\n# ${details.title}\n\n${details.desc}\n\n---\n\n## 📄 Artigos Disponíveis (${files.length})\n\n`;
+
+    if (files.length === 0) {
+      mdContent += `*Nenhum artigo disponível nesta categoria ainda.*`;
+    } else {
+      for (const file of files) {
+        const title = file.replace(/\.md$/, '').replace(/_/g, ' ');
+        mdContent += `*   [${title}](./${file})\n`;
+      }
+    }
+
+    fs.writeFileSync(path.join(dirPath, 'index.md'), mdContent, 'utf-8');
+    console.log(`[WikiService] Índice regenerado para categoria "${category}"`);
+  } catch (error) {
+    console.error('[WikiService] Erro ao regenerar índice de categoria:', error);
+  }
 }
 
 /** Parses frontmatter and body from a markdown file */
@@ -228,6 +267,7 @@ export function createWikiEntry(title, content, category, aliasesStr = '') {
     };
     wikiCache[normalizedTitle] = newEntry;
 
+    regenerateCategoryIndex(normalizedCategory);
     triggerGitSync();
     return { success: true, entry: newEntry };
   } catch (error) {
@@ -281,6 +321,10 @@ export function editWikiEntry(title, content, category = null, aliasesStr = null
     fs.writeFileSync(entry.filePath, fileContent, 'utf-8');
     wikiCache[entry.title] = entry;
     
+    regenerateCategoryIndex(entry.category);
+    if (category && category !== oldCategory) {
+      regenerateCategoryIndex(oldCategory);
+    }
     triggerGitSync();
     return { success: true, entry };
   } catch (error) {
@@ -303,6 +347,7 @@ export function deleteWikiEntry(title) {
     }
     delete wikiCache[entry.title];
     
+    regenerateCategoryIndex(entry.category);
     triggerGitSync();
     return { success: true };
   } catch (error) {

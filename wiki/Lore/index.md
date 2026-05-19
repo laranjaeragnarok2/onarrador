@@ -1,3 +1,13 @@
-# 📜 Lore & História do Mundo
+---
+layout: doc
+---
 
-Esta seção descreve a história, religiões, lendas e mitologias do cenário da campanha.
+# 📜 História & Lore
+
+Cronologias, deuses, lendas e mitos do cenário de campanha.
+
+---
+
+## 📄 Artigos Disponíveis (1)
+
+*   [Paladino](./Paladino.md)
