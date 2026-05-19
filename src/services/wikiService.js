@@ -3,7 +3,7 @@ import path from 'path';
 import { exec } from 'child_process';
 import { DATA_DIR } from '../core/paths.js';
 
-const WIKI_DIR = path.resolve(process.cwd(), 'wiki');
+const WIKI_DIR = path.resolve(process.cwd(), 'wiki', 'docs');
 
 // Category subdirectories mapping
 const CATEGORY_DIRS = {

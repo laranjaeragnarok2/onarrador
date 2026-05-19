@@ -1,0 +1,283 @@
+/**
+ * Wikipedia / MediaWiki inspired CSS Theme for Docusaurus
+ */
+
+:root {
+  /* Wikipedia Classic Color Palette (Light Mode) */
+  --ifm-color-primary: #3366cc; /* Wikipedia Link Blue */
+  --ifm-color-primary-dark: #2a52be;
+  --ifm-color-primary-darker: #2446a2;
+  --ifm-color-primary-darkest: #1b357a;
+  --ifm-color-primary-light: #4c85eb;
+  --ifm-color-primary-lighter: #6697f0;
+  --ifm-color-primary-lightest: #99bbf5;
+  
+  --ifm-background-color: #f8f9fa; /* Wikipedia Page Backdrop */
+  --ifm-background-surface-color: #ffffff; /* White Article Container */
+  --ifm-navbar-background-color: #ffffff;
+  --ifm-footer-background-color: #f8f9fa;
+  
+  /* Text and borders */
+  --ifm-font-color-base: #202122; /* High contrast dark gray text */
+  --ifm-font-color-secondary: #54595d;
+  --ifm-border-color: #a2a9b1; /* Wikipedia Border Gray */
+  --ifm-border-width: 1px;
+  
+  /* Typography */
+  --ifm-font-family-base: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Lato, Helvetica, Arial, sans-serif;
+  --ifm-font-family-headings: "Linux Libertine", "Georgia", "Times, serif", serif;
+  
+  --ifm-navbar-shadow: none;
+  --ifm-navbar-border: 1px solid var(--ifm-border-color);
+  
+  --ifm-sidebar-width: 260px;
+}
+
+[data-theme='dark'] {
+  /* Wikipedia Dark Mode Option */
+  --ifm-color-primary: #66b2ff;
+  --ifm-color-primary-dark: #3399ff;
+  --ifm-color-primary-darker: #0077e6;
+  --ifm-color-primary-darkest: #0059b3;
+  --ifm-color-primary-light: #99ccff;
+  --ifm-color-primary-lighter: #b3d9ff;
+  --ifm-color-primary-lightest: #e6f2ff;
+  
+  --ifm-background-color: #0f1115;
+  --ifm-background-surface-color: #161a22;
+  --ifm-navbar-background-color: #161a22;
+  --ifm-footer-background-color: #161a22;
+  
+  --ifm-font-color-base: #e3e3e3;
+  --ifm-font-color-secondary: #9aa0a6;
+  --ifm-border-color: #3c4043;
+}
+
+/* Page Frame Structure */
+.main-wrapper {
+  background-color: var(--ifm-background-color);
+}
+
+.docPage_node_modules-\@docusaurus-theme-classic-src-theme-DocPage-Layout-styles-module,
+.theme-doc-page {
+  background-color: var(--ifm-background-color);
+}
+
+/* Main Doc Container Box - Wikipedia Page Card */
+.theme-doc-markdown {
+  background-color: var(--ifm-background-surface-color);
+  border: 1px solid var(--ifm-border-color);
+  border-radius: 2px;
+  padding: 2.5rem 3rem !important;
+  margin-top: 1rem;
+  margin-bottom: 2rem;
+  box-shadow: 0 1px 1px rgba(0,0,0,0.05);
+}
+
+@media (max-width: 996px) {
+  .theme-doc-markdown {
+    border: none;
+    padding: 1.5rem !important;
+    margin-top: 0;
+  }
+}
+
+/* Sidebar Styling - Vector Menu Style */
+.theme-doc-sidebar-container {
+  border-right: 1px solid var(--ifm-border-color) !important;
+  background-color: var(--ifm-background-color) !important;
+}
+
+.theme-doc-sidebar-item-link {
+  font-size: 0.88rem !important;
+  color: var(--ifm-color-primary) !important;
+  border-radius: 0 !important;
+  padding: 0.35rem 0.6rem !important;
+}
+
+.theme-doc-sidebar-item-link:hover {
+  text-decoration: underline !important;
+  background-color: transparent !important;
+}
+
+.theme-doc-sidebar-item-link-active {
+  background-color: transparent !important;
+  color: var(--ifm-font-color-base) !important;
+  font-weight: bold !important;
+}
+
+.menu__list-item-collapsible:hover {
+  background-color: transparent !important;
+}
+
+/* Headings with Wikipedia Underlines */
+h1 {
+  font-family: var(--ifm-font-family-headings);
+  font-size: 2.1rem;
+  font-weight: normal;
+  border-bottom: 1px solid var(--ifm-border-color);
+  padding-bottom: 0.25rem;
+  margin-top: 0;
+  margin-bottom: 1.2rem;
+}
+
+h2 {
+  font-family: var(--ifm-font-family-headings);
+  font-size: 1.5rem;
+  font-weight: normal;
+  border-bottom: 1px solid var(--ifm-border-color);
+  padding-bottom: 0.2rem;
+  margin-top: 2rem;
+  margin-bottom: 0.8rem;
+}
+
+h3 {
+  font-size: 1.2rem;
+  font-weight: bold;
+  margin-top: 1.6rem;
+}
+
+/* Wikipedia Infobox Table Overrides */
+.theme-doc-markdown table {
+  display: table !important;
+  width: 320px !important;
+  float: right;
+  margin: 0 0 1.5rem 1.5rem;
+  background-color: var(--ifm-background-color) !important;
+  border: 1px solid var(--ifm-border-color) !important;
+  border-collapse: collapse !important;
+  font-size: 0.85rem !important;
+  line-height: 1.4;
+}
+
+.theme-doc-markdown th {
+  background-color: #eaecf0 !important;
+  color: #000000 !important;
+  border: 1px solid var(--ifm-border-color) !important;
+  padding: 0.5rem !important;
+  text-align: center;
+  font-weight: bold;
+}
+
+[data-theme='dark'] .theme-doc-markdown th {
+  background-color: #20242c !important;
+  color: #ffffff !important;
+}
+
+.theme-doc-markdown td {
+  border: 1px solid var(--ifm-border-color) !important;
+  padding: 0.4rem 0.6rem !important;
+  background-color: var(--ifm-background-surface-color) !important;
+}
+
+/* Wikipedia Homepage Styles */
+.wikipedia-homepage {
+  font-family: var(--ifm-font-family-base);
+}
+
+.wiki-header-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: var(--ifm-background-color);
+  border: 1px solid var(--ifm-border-color);
+  padding: 1.5rem 2rem;
+  margin-bottom: 1.5rem;
+  border-radius: 2px;
+}
+
+.wiki-header-text h1 {
+  font-family: var(--ifm-font-family-headings);
+  font-size: 2rem !important;
+  border-bottom: none !important;
+  margin-bottom: 0.3rem !important;
+  padding-bottom: 0 !important;
+}
+
+.wiki-header-text p {
+  margin-bottom: 0.5rem;
+  font-size: 0.95rem;
+}
+
+.wiki-header-stats {
+  font-size: 0.85rem;
+  color: var(--ifm-font-color-secondary);
+}
+
+.wiki-header-logo img {
+  width: 90px;
+  height: 90px;
+  object-fit: contain;
+}
+
+.wiki-columns {
+  display: flex;
+  gap: 1.5rem;
+}
+
+.wiki-main-col {
+  flex: 1.3;
+}
+
+.wiki-sidebar-col {
+  flex: 1;
+}
+
+.wiki-box {
+  border: 1px solid var(--ifm-border-color);
+  background-color: var(--ifm-background-surface-color);
+  margin-bottom: 1.5rem;
+  border-radius: 2px;
+}
+
+.wiki-box-title {
+  background-color: #f2f2f2;
+  border-bottom: 1px solid var(--ifm-border-color);
+  padding: 0.4rem 0.8rem !important;
+  margin: 0 !important;
+  font-size: 1.1rem !important;
+  font-weight: bold !important;
+  color: #000000 !important;
+  font-family: var(--ifm-font-family-base) !important;
+}
+
+[data-theme='dark'] .wiki-box-title {
+  background-color: #20242c;
+  color: #ffffff !important;
+}
+
+.wiki-box-body {
+  padding: 0.8rem 1rem;
+  font-size: 0.92rem;
+  line-height: 1.6;
+}
+
+.wiki-box-footer {
+  border-top: 1px solid var(--ifm-border-color);
+  margin-top: 0.8rem;
+  padding-top: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--ifm-font-color-secondary);
+}
+
+.wiki-bullet-list {
+  padding-left: 1.2rem !important;
+  margin: 0.5rem 0 !important;
+}
+
+.wiki-bullet-list li {
+  margin-bottom: 0.5rem !important;
+}
+
+@media (max-width: 768px) {
+  .wiki-header-banner {
+    flex-direction: column-reverse;
+    text-align: center;
+    gap: 1rem;
+    padding: 1rem;
+  }
+  .wiki-columns {
+    flex-direction: column;
+    gap: 0;
+  }
+}

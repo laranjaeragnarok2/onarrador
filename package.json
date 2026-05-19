@@ -11,15 +11,12 @@
   },
   "scripts": {
     "start": "node index.js",
-    "wiki:dev": "vitepress dev wiki",
-    "wiki:build": "vitepress build wiki",
-    "wiki:preview": "vitepress preview wiki"
+    "wiki:dev": "npm run start --prefix wiki",
+    "wiki:build": "npm run build --prefix wiki",
+    "wiki:serve": "npm run serve --prefix wiki"
   },
   "overrides": {
     "gaxios": "^7.1.4",
     "undici": "^7.24.3"
-  },
-  "devDependencies": {
-    "vitepress": "^1.6.4"
   }
 }
