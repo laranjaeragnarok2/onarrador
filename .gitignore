@@ -5,3 +5,5 @@ data/
 temp/
 logs/
 config.js
+wiki/.vitepress/dist/
+wiki/.vitepress/cache/
